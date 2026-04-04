@@ -1,0 +1,5 @@
+{
+  "name": "Nettoyeur de données",
+  "description": "Filtre les colonnes et lignes, exporte CSV et génère un histogramme",
+  "url": "index.html"
+}
