@@ -225,9 +225,9 @@ function runClean(){
           var carbone="";
           if(!isNaN(dist)&&dist!==""){
             if(row["Mode de deplacement"]==="Train"){
-              carbone=Math.round((dist*1.2)*2*1.72);
+              carbone=Math.round(((dist*1.2)*2*1.72)/1000*100)/100;
             } else if(row["Mode de deplacement"]==="Avion"){
-              carbone=Math.round((dist+95)*2*125);
+              carbone=Math.round(((dist+95)*2*125)/1000*100)/100;
             }
           }
           // Reconstruire la ligne dans le bon ordre
@@ -403,7 +403,7 @@ function writeToGrist(){
           {id:"Categorie",            fields:{label:"Categorie",                        type:"Text"}},
           {id:"Nb_Deplacements",      fields:{label:"Nb Deplacements",                 type:"Numeric"}},
           {id:"Somme_Prix_Vente",     fields:{label:"Somme Prix Vente",                type:"Numeric"}},
-          {id:"Impact_carbone_total", fields:{label:"Impact carbone total (gCO2)",     type:"Numeric"}},
+          {id:"Impact_carbone_total", fields:{label:"Impact carbone total (kgCO2)",     type:"Numeric"}},
           {id:"Axe",                  fields:{label:"Axe X",                           type:"Text"}}
         ]]]);
       })
@@ -451,7 +451,7 @@ var XLBL={
   "Destination_Arrivee"   :"Destination Arrivee",
   "Code_Pays_Arrivee"     :"Code Pays Arrivee",
   "ZoneStatReponse4"      :"Identifiant",
-  "Client_Niveau_0_Prenom":"Centre","Impact_carbone":"Impact carbone (gCO2)"
+  "Client_Niveau_0_Prenom":"Centre","Impact_carbone":"Impact carbone (kgCO2)"
 };
 
 function buildChart(){
@@ -579,24 +579,24 @@ function buildCarbonChart(){
       labels:labels,
       datasets:[
         {label:"Nb deplacements",data:counts,backgroundColor:getColors(labels.length),borderRadius:4,yAxisID:"y1"},
-        {label:"Impact carbone total (gCO2)",data:carbones,backgroundColor:labels.map(function(_,i){return getColors(labels.length)[i]+"99";}),borderRadius:4,yAxisID:"y2"}
+        {label:"Impact carbone total (kgCO2)",data:carbones,backgroundColor:labels.map(function(_,i){return getColors(labels.length)[i]+"99";}),borderRadius:4,yAxisID:"y2"}
       ]
     },
     options:{
       responsive:true,
       plugins:{
         legend:{display:true,position:"top"},
-        title:{display:true,text:"Impact carbone par mode de deplacement",font:{size:13}},
+        title:{display:true,text:"Impact carbone (kgCO2) par mode de deplacement",font:{size:13}},
         tooltip:{callbacks:{label:function(c){
           return c.datasetIndex===0
             ?" "+c.parsed.y+" deplacement(s)"
-            :" "+c.parsed.y.toLocaleString("fr-FR")+" gCO2";
+            :" "+c.parsed.y.toLocaleString("fr-FR")+" kgCO2";
         }}}
       },
       scales:{
         x:{ticks:{maxRotation:0,font:{size:12}}},
         y1:{type:"linear",position:"left",beginAtZero:true,ticks:{precision:0,color:"#185FA5"},title:{display:true,text:"Nb deplacements",color:"#185FA5",font:{size:11}}},
-        y2:{type:"linear",position:"right",beginAtZero:true,grid:{drawOnChartArea:false},ticks:{color:"#854F0B",callback:function(v){return v.toLocaleString("fr-FR")+" gCO2";}},title:{display:true,text:"Impact carbone (gCO2)",color:"#854F0B",font:{size:11}}}
+        y2:{type:"linear",position:"right",beginAtZero:true,grid:{drawOnChartArea:false},ticks:{color:"#854F0B",callback:function(v){return v.toLocaleString("fr-FR")+" kgCO2";}},title:{display:true,text:"Impact carbone (kgCO2)",color:"#854F0B",font:{size:11}}}
       }
     }
   });
