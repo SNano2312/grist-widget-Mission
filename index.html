@@ -56,26 +56,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
   <div class="tab" onclick="switchTab('c',this)">Impact carbone</div>
 </div>
 <div class="tc active" id="tab-n">
-  <div class="card">
-    <div class="ct">Transformations</div>
-    <ul class="sl">
-      <li>Colonnes conservees :
-        <span class="pill pk">Client_Niveau_0_Prenom</span>
-        <span class="pill pk">ZoneStatReponse4</span>
-        <span class="pill pk">Date_de_Debut_Depart</span>
-        <span class="pill pk">Destination_Depart</span>
-        <span class="pill pk">Code_Pays_Depart</span>
-        <span class="pill pk">Destination_Arrivee</span>
-        <span class="pill pk">Code_Pays_Arrivee</span>
-        <span class="pill pf">Activite_Type &rarr; Mode de deplacement</span>
-      </li>
-      <li>Filtre Activite_Type : <span class="pill pf">RAIL</span> et <span class="pill pf">AIR</span> uniquement</li>
-      <li>Suppression paires +/- sur Prix_de_Vente groupees par ZoneStatReponse4</li>
-      <li>Code pays retire de Destination_Depart et Destination_Arrivee</li>
-      <li>Ajout : <span class="pill pa">Nb de personnes dans la voiture</span> <span class="pill pa">Aller / Retour = Oui</span></li>
-      <li>CSV exporte sans Prix_de_Vente</li>
-    </ul>
-  </div>
+
   <div class="card" id="sc" style="display:none">
     <div class="ct">Resultat</div>
     <div class="sr">
@@ -391,50 +372,50 @@ function writeToGrist(){
   function saveHistogramme(){
     var DEST="Table_Histogramme";
     var allAxes=["Mode de deplacement","Destination_Arrivee","Code_Pays_Arrivee","ZoneStatReponse4","Client_Niveau_0_Prenom"];
-    var axeLabels={"Mode de deplacement":"Mode de deplacement","Destination_Arrivee":"Destination Arrivee","Code_Pays_Arrivee":"Code Pays Arrivee","ZoneStatReponse4":"Identifiant","Client_Niveau_0_Prenom":"Centre","Impact_carbone":"Impact carbone (gCO2)"};
+    var axeLabels={"Mode de deplacement":"Mode de deplacement","Destination_Arrivee":"Destination Arrivee","Code_Pays_Arrivee":"Code Pays Arrivee","ZoneStatReponse4":"Identifiant","Client_Niveau_0_Prenom":"Centre"};
     var rows=[];
     allAxes.forEach(function(xCol){
       var agg={};
       cleanD.forEach(function(row){
         var k=(row[xCol]||"Inconnu").toString().trim();
-        if(!agg[k])agg[k]={count:0,sum:0};
+        if(!agg[k])agg[k]={count:0,sum:0,carbone:0};
         agg[k].count+=1;
         var p=parseFloat(row["Prix_de_Vente"]);
         if(!isNaN(p))agg[k].sum+=p;
+        var co2=parseFloat(row["Impact_carbone"]);
+        if(!isNaN(co2))agg[k].carbone+=co2;
       });
       Object.keys(agg).sort(function(a,b){return agg[b].count-agg[a].count;}).forEach(function(k){
-        rows.push({Categorie:k,Nb_Deplacements:agg[k].count,Somme_Prix_Vente:Math.round(agg[k].sum),Impact_carbone_total:Math.round(agg[k].carbone||0),Axe:axeLabels[xCol]||xCol});
+        rows.push({
+          Categorie:k,
+          Nb_Deplacements:agg[k].count,
+          Somme_Prix_Vente:Math.round(agg[k].sum),
+          Impact_carbone_total:Math.round(agg[k].carbone),
+          Axe:axeLabels[xCol]||xCol
+        });
       });
     });
-    // Supprimer la table si elle existe puis la recréer avec les bons types
     return grist.docApi.fetchTable(DEST)
-      .then(function(ex){
-        // Table existe : on la supprime entièrement
-        return grist.docApi.applyUserActions([["RemoveTable",DEST]]);
-      })
-      .catch(function(){
-        // Table n existe pas, rien a faire
-        return Promise.resolve();
-      })
+      .then(function(){return grist.docApi.applyUserActions([["RemoveTable",DEST]]);})
+      .catch(function(){return Promise.resolve();})
       .then(function(){
-        // Recréer la table avec les types corrects
         return grist.docApi.applyUserActions([["AddTable",DEST,[
-          {id:"Categorie",fields:{label:"Categorie",type:"Text"}},
-          {id:"Nb_Deplacements",fields:{label:"Nb Deplacements",type:"Numeric"}},
-          {id:"Somme_Prix_Vente",fields:{label:"Somme Prix Vente",type:"Numeric"}},
-          {id:"Axe",fields:{label:"Axe X",type:"Text"}}
+          {id:"Categorie",            fields:{label:"Categorie",                        type:"Text"}},
+          {id:"Nb_Deplacements",      fields:{label:"Nb Deplacements",                 type:"Numeric"}},
+          {id:"Somme_Prix_Vente",     fields:{label:"Somme Prix Vente",                type:"Numeric"}},
+          {id:"Impact_carbone_total", fields:{label:"Impact carbone total (gCO2)",     type:"Numeric"}},
+          {id:"Axe",                  fields:{label:"Axe X",                           type:"Text"}}
         ]]]);
       })
       .then(function(){
         showLog("Table_Histogramme : ecriture de "+rows.length+" lignes (5 axes)...","info");
-        var rec={
-          Categorie:rows.map(function(r){return r.Categorie;}),
-          Nb_Deplacements:rows.map(function(r){return parseInt(r.Nb_Deplacements,10)||0;}),
-          Somme_Prix_Vente:rows.map(function(r){return parseFloat(r.Somme_Prix_Vente)||0;}),
-          Impact_carbone_total:rows.map(function(r){return parseInt(r.Impact_carbone_total,10)||0;}),
-          Axe:rows.map(function(r){return r.Axe;})
-        };
-        return grist.docApi.applyUserActions([["BulkAddRecord",DEST,new Array(rows.length).fill(null),rec]]);
+        return grist.docApi.applyUserActions([["BulkAddRecord",DEST,new Array(rows.length).fill(null),{
+          Categorie:           rows.map(function(r){return r.Categorie;}),
+          Nb_Deplacements:     rows.map(function(r){return r.Nb_Deplacements;}),
+          Somme_Prix_Vente:    rows.map(function(r){return r.Somme_Prix_Vente;}),
+          Impact_carbone_total:rows.map(function(r){return r.Impact_carbone_total;}),
+          Axe:                 rows.map(function(r){return r.Axe;})
+        }]]);
       });
   }
 
