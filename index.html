@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nettoyeur de donnees</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;color:#1a1a1a;background:#f5f5f3;padding:16px}
+h1{font-size:15px;font-weight:600;margin-bottom:2px}
+.subtitle{font-size:12px;color:#888;margin-bottom:16px}
+.tabs{display:flex;border-bottom:2px solid #e5e5e5;margin-bottom:16px}
+.tab{padding:8px 18px;font-size:13px;font-weight:500;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px}
+.tab.active{color:#185FA5;border-bottom-color:#185FA5}
+.tc{display:none}.tc.active{display:block}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.ct{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.pill{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid;display:inline-block;margin:2px}
+.pk{background:#eaf3de;color:#27500a;border-color:#c0dd97}
+.pf{background:#eeedfe;color:#3c3489;border-color:#cecbf6}
+.pa{background:#faeeda;color:#633806;border-color:#fac775}
+.sl{list-style:none;counter-reset:s}
+.sl li{counter-increment:s;display:flex;align-items:flex-start;gap:8px;margin-bottom:7px;font-size:13px;color:#444;line-height:1.5;flex-wrap:wrap}
+.sl li::before{content:counter(s);min-width:20px;height:20px;background:#185FA5;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px}
+.sr{display:flex;gap:8px;flex-wrap:wrap}
+.sb{flex:1;min-width:90px;background:#f5f5f3;border-radius:8px;padding:10px 12px;text-align:center}
+.sn{font-size:24px;font-weight:600;color:#185FA5}
+.sl2{font-size:11px;color:#888;margin-top:2px}
+.br{display:flex;gap:8px;flex-wrap:wrap}
+button{padding:8px 18px;border-radius:7px;border:1px solid;font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s}
+button:hover{opacity:.82}
+button:disabled{opacity:.4;cursor:not-allowed}
+.bp{background:#185FA5;color:#fff;border-color:#0c447c}
+.bc{background:#eaf3de;color:#27500a;border-color:#c0dd97}
+.bf{background:#854F0B;color:#fff;border-color:#633806}
+.bw{background:#1d9e75;color:#fff;border-color:#0f6e56}
+.bd{background:#faeeda;color:#633806;border-color:#fac775;font-size:12px;padding:5px 12px}
+#log{display:none;margin-top:12px;padding:10px 13px;border-radius:8px;font-size:12px;line-height:1.7;white-space:pre-wrap;font-family:monospace}
+#log.ok{background:#eaf3de;border:1px solid #c0dd97;color:#27500a}
+#log.error{background:#fcebeb;border:1px solid #f7c1c1;color:#a32d2d}
+#log.info{background:#e6f1fb;border:1px solid #b5d4f4;color:#0c447c}
+.cc{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.cc label{font-size:13px;color:#555}
+.cc select{padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:#fff}
+.ce{text-align:center;padding:40px;color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Nettoyeur de donnees</h1>
+<p class="subtitle">Filtre, nettoie et exporte les donnees Grist</p>
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('n',this)">Nettoyage</div>
+  <div class="tab" onclick="switchTab('h',this)">Histogramme</div>
+</div>
+<div class="tc active" id="tab-n">
+  <div class="card">
+    <div class="ct">Transformations</div>
+    <ul class="sl">
+      <li>Colonnes conservees :
+        <span class="pill pk">Client_Niveau_0_Prenom</span>
+        <span class="pill pk">ZoneStatReponse4</span>
+        <span class="pill pk">Date_de_Debut_Depart</span>
+        <span class="pill pk">Destination_Depart</span>
+        <span class="pill pk">Code_Pays_Depart</span>
+        <span class="pill pk">Destination_Arrivee</span>
+        <span class="pill pk">Code_Pays_Arrivee</span>
+        <span class="pill pf">Activite_Type &rarr; Mode de deplacement</span>
+      </li>
+      <li>Filtre Activite_Type : <span class="pill pf">RAIL</span> et <span class="pill pf">AIR</span> uniquement</li>
+      <li>Suppression paires +/- sur Prix_de_Vente groupees par ZoneStatReponse4</li>
+      <li>Code pays retire de Destination_Depart et Destination_Arrivee</li>
+      <li>Ajout : <span class="pill pa">Nb de personnes dans la voiture</span> <span class="pill pa">Aller / Retour = Oui</span></li>
+      <li>CSV exporte sans Prix_de_Vente</li>
+    </ul>
+  </div>
+  <div class="card" id="sc" style="display:none">
+    <div class="ct">Resultat</div>
+    <div class="sr">
+      <div class="sb"><div class="sn" id="s1">-</div><div class="sl2">lignes initiales</div></div>
+      <div class="sb"><div class="sn" id="s2" style="color:#a32d2d">-</div><div class="sl2">filtrees</div></div>
+      <div class="sb"><div class="sn" id="s3" style="color:#a32d2d">-</div><div class="sl2">paires annulees</div></div>
+      <div class="sb"><div class="sn" id="s4" style="color:#3b6d11">-</div><div class="sl2">lignes finales</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Filtre par centre</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <select id="fc" style="flex:1;min-width:180px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:#fff" onchange="applyFilter()">
+        <option value="">-- Tous les centres --</option>
+      </select>
+      <button onclick="resetFilter()" style="padding:6px 14px;border-radius:6px;border:1px solid #ddd;background:#f5f5f3;font-size:12px;cursor:pointer">Reinitialiser</button>
+      <span id="fcount" style="font-size:12px;color:#888"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct">Actions</div>
+    <div class="br">
+      <button class="bf" id="btnF" onclick="forceLoad()">&#8635; Charger les donnees</button>
+      <button class="bp" id="btnC" onclick="runClean()" disabled>&#9654; Lancer le nettoyage</button>
+      <button class="bc" id="btnX" onclick="dlCSV()" disabled>&#8681; Telecharger CSV</button>
+      <button class="bw" id="btnW" onclick="writeToGrist()" disabled>&#128190; Ecrire dans Grist</button>
+      <button class="bd" onclick="showDebug()">&#128269; Debug</button>
+    </div>
+    <div id="log"></div>
+  </div>
+</div>
+<div class="tc" id="tab-h">
+  <div class="card">
+    <div class="ct">Histogramme</div>
+    <div class="cc">
+      <label>Axe X :</label>
+      <select id="cx" onchange="buildChart()">
+        <option value="Mode de deplacement">Mode de deplacement</option>
+        <option value="Destination_Arrivee">Destination Arrivee</option>
+        <option value="Code_Pays_Arrivee">Code Pays Arrivee</option>
+        <option value="ZoneStatReponse4">Identifiant</option>
+        <option value="Client_Niveau_0_Prenom">Centre</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px">
+      <button id="btnS" onclick="saveChart()" disabled style="padding:6px 14px;border-radius:7px;border:1px solid #0f6e56;background:#1d9e75;color:#fff;font-size:12px;cursor:pointer;opacity:.4">&#128190; Sauvegarder dans Grist</button>
+      <span id="ss" style="font-size:12px;color:#888;margin-left:8px"></span>
+    </div>
+    <div id="ce" class="ce">Lancez d abord le nettoyage</div>
+    <canvas id="mc" height="220" style="display:none"></canvas>
+  </div>
+</div>
+<script>
+var CTK=["Client_Niveau_0_Prenom","ZoneStatReponse4","Date_de_Debut_Depart","Destination_Depart","Code_Pays_Depart","Destination_Arrivee","Code_Pays_Arrivee","Prix_de_Vente","Activite_Type"];
+var AV=["RAIL","AIR"];
+var VC="Prix_de_Vente";
+var GC="ZoneStatReponse4";
+var FC="Client_Niveau_0_Prenom";
+var allR=[],cleanD=null,filtD=null,ci=null;
+
+function switchTab(n,el){
+  document.querySelectorAll(".tab").forEach(function(t){t.classList.remove("active")});
+  document.querySelectorAll(".tc").forEach(function(c){c.classList.remove("active")});
+  el.classList.add("active");
+  document.getElementById("tab-"+n).classList.add("active");
+  if(n==="h"&&cleanD)buildChart();
+}
+
+grist.ready({requiredAccess:"full"});
+
+try{
+  var sv=sessionStorage.getItem("gr");
+  if(sv){allR=JSON.parse(sv);document.getElementById("btnC").disabled=false;document.getElementById("btnF").style.display="none";showLog("OK "+allR.length+" lignes restaurees.","info");}
+}catch(e){}
+
+grist.onRecords(function(r){
+  if(!r||!r.length)return;
+  allR=r;
+  try{sessionStorage.setItem("gr",JSON.stringify(r));}catch(e){}
+  document.getElementById("btnC").disabled=false;
+  document.getElementById("btnF").style.display="none";
+  showLog("OK "+r.length+" lignes chargees.","info");
+});
+
+function forceLoad(){
+  document.getElementById("btnF").textContent="Chargement...";
+  document.getElementById("btnF").disabled=true;
+  grist.docApi.listTables().then(function(t){
+    var list=Array.isArray(t)?t:(t.tableIds||t.tables||[]);
+    var tid=list[0];
+    showLog("Chargement de : "+tid,"info");
+    return grist.docApi.fetchTable(tid).then(function(d){
+      var keys=Object.keys(d).filter(function(k){return k!=="id";});
+      var len=d[keys[0]].length;
+      allR=[];
+      for(var i=0;i<len;i++){var row={};keys.forEach(function(k){row[k]=d[k][i];});allR.push(row);}
+      try{sessionStorage.setItem("gr",JSON.stringify(allR));}catch(e){}
+      document.getElementById("btnC").disabled=false;
+      document.getElementById("btnF").style.display="none";
+      showLog("OK "+allR.length+" lignes chargees.","ok");
+    });
+  }).catch(function(e){
+    showLog("Erreur : "+e.message,"error");
+    document.getElementById("btnF").textContent="Charger les donnees";
+    document.getElementById("btnF").disabled=false;
+  });
+}
+
+function showDebug(){
+  if(!allR.length){showLog("Pas de donnees.","error");return;}
+  var cols=Object.keys(allR[0]);
+  var av=[]; allR.slice(0,50).forEach(function(r){var v=String(r["Activite_Type"]||"");if(av.indexOf(v)<0)av.push(v);});
+  showLog(
+    "Activite_Type          : "+(cols.indexOf("Activite_Type")>=0?"OK":"NON TROUVE")+"\n"+
+    "Prix_de_Vente          : "+(cols.indexOf("Prix_de_Vente")>=0?"OK":"NON TROUVE")+"\n"+
+    "ZoneStatReponse4       : "+(cols.indexOf("ZoneStatReponse4")>=0?"OK":"NON TROUVE")+"\n"+
+    "Client_Niveau_0_Prenom : "+(cols.indexOf("Client_Niveau_0_Prenom")>=0?"OK":"NON TROUVE")+"\n\n"+
+    "Valeurs Activite_Type  : "+av.join(", ")+"\n\n"+
+    "Toutes colonnes ("+cols.length+") : "+cols.join(" | "),
+    "info"
+  );
+}
+
+function strip(v){if(!v)return v;return String(v).replace(/\s*\([A-Z]{2}\)\s*$/,"").trim();}
+
+function runClean(){
+  if(!allR.length){showLog("Utilisez le bouton Charger les donnees.","error");return;}
+  showLog("Traitement en cours...","info");
+  document.getElementById("btnC").disabled=true;
+  setTimeout(function(){
+    try{
+      var tot=allR.length;
+      var df=allR.map(function(row){var o={};CTK.forEach(function(c){if(c in row)o[c]=row[c];});return o;});
+      var bf=df.length;
+      df=df.filter(function(row){return AV.indexOf((row["Activite_Type"]||"").toString().trim().toUpperCase())>=0;});
+      var fr=bf-df.length;
+      var bc=df.length;
+      df=cancelRows(df,VC,GC);
+      var cr=bc-df.length;
+      df=df.map(function(row){var r=Object.assign({},row);r["Destination_Depart"]=strip(r["Destination_Depart"]);r["Destination_Arrivee"]=strip(r["Destination_Arrivee"]);return r;});
+      df=df.map(function(row){var n={};Object.keys(row).forEach(function(k){n[k==="Activite_Type"?"Mode de deplacement":k]=row[k];});n["Nb de personnes dans la voiture"]="";n["Aller / Retour"]="Oui";return n;});
+      cleanD=df;filtD=null;
+      populateFilter(df);
+      document.getElementById("s1").textContent=tot;
+      document.getElementById("s2").textContent=fr;
+      document.getElementById("s3").textContent=cr;
+      document.getElementById("s4").textContent=df.length;
+      document.getElementById("sc").style.display="block";
+      document.getElementById("btnX").disabled=false;
+      document.getElementById("btnW").disabled=false;
+      buildChart();
+      showLog("Nettoyage termine !\n- Initial : "+tot+"\n- Filtrees : "+fr+"\n- Paires : "+cr+"\n- Final : "+df.length,"ok");
+    }catch(e){showLog("Erreur : "+e.message,"error");}
+    document.getElementById("btnC").disabled=false;
+  },50);
+}
+
+function cancelRows(df,vc,gc){
+  var g={};
+  df.forEach(function(row,i){var k=String(row[gc]!=null?row[gc]:"");if(!g[k])g[k]=[];g[k].push(i);});
+  var rm={};
+  Object.values(g).forEach(function(idx){
+    var rows=idx.map(function(i){return{i:i,v:parseFloat(df[i][vc])};}).filter(function(x){return!isNaN(x.v);});
+    var pos=rows.filter(function(x){return x.v>0;});
+    var neg=rows.filter(function(x){return x.v<0;});
+    var un={};
+    pos.forEach(function(p){
+      var m=null;
+      for(var n=0;n<neg.length;n++){if(!un[neg[n].i]&&Math.abs(p.v+neg[n].v)<0.001){m=neg[n];break;}}
+      if(m){rm[p.i]=true;rm[m.i]=true;un[m.i]=true;}
+    });
+  });
+  return df.filter(function(_,i){return!rm[i];});
+}
+
+function populateFilter(df){
+  var sel=document.getElementById("fc"),seen={},vals=[];
+  df.forEach(function(r){var v=r[FC]||"";if(v&&!seen[v]){seen[v]=true;vals.push(v);}});
+  vals.sort();
+  sel.innerHTML="<option value=''>-- Tous les centres --</option>";
+  vals.forEach(function(v){var o=document.createElement("option");o.value=v;o.text=v;sel.appendChild(o);});
+}
+
+function applyFilter(){
+  if(!cleanD)return;
+  var v=document.getElementById("fc").value;
+  filtD=v?cleanD.filter(function(r){return(r[FC]||"")===v;}):null;
+  document.getElementById("fcount").textContent=v?(filtD||cleanD).length+" ligne(s)":"";
+  buildChart();
+}
+
+function resetFilter(){
+  document.getElementById("fc").value="";filtD=null;
+  document.getElementById("fcount").textContent="";buildChart();
+}
+
+function dlCSV(){
+  if(!cleanD||!cleanD.length){showLog("Lancez d abord le nettoyage.","error");return;}
+  var ed=filtD||cleanD;
+  var cols=Object.keys(ed[0]).filter(function(c){return c!=="Prix_de_Vente";});
+  var lines=[cols.map(function(c){return'"'+c.replace(/"/g,'""')+'"';}).join(";")];
+  ed.forEach(function(row){lines.push(cols.map(function(c){var v=(row[c]==null)?"":String(row[c]);return'"'+v.replace(/"/g,'""')+'"';}).join(";"));});
+  var blob=new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8;"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url;a.download="export_grist.csv";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showLog("export_grist.csv telecharge ("+ed.length+" lignes).","ok");
+}
+
+function writeToGrist(){
+  var data=filtD||cleanD;
+  if(!data||!data.length){showLog("Lancez d abord le nettoyage.","error");return;}
+  var btn=document.getElementById("btnW");
+  btn.disabled=true;btn.textContent="Ecriture...";
+  var DEST="Table_Nettoyee";
+  var cols=Object.keys(data[0]);
+  grist.docApi.fetchTable(DEST)
+    .then(function(ex){
+      var ids=ex.id||[];
+      if(ids.length>0)return grist.docApi.applyUserActions([["BulkRemoveRecord",DEST,ids]]);
+    })
+    .catch(function(){
+      var gc2=cols.map(function(id){return{id:id.replace(/[^a-zA-Z0-9_]/g,"_"),fields:{label:id}};});
+      return grist.docApi.applyUserActions([["AddTable",DEST,gc2]]);
+    })
+    .then(function(){
+      var B=200,p=Promise.resolve();
+      for(var i=0;i<data.length;i+=B){
+        (function(s){
+          p=p.then(function(){
+            var batch=data.slice(s,s+B),rec={};
+            cols.forEach(function(c){var sc=c.replace(/[^a-zA-Z0-9_]/g,"_");rec[sc]=batch.map(function(r){return r[c]!=null?r[c]:"";});});
+            showLog("Ecriture : "+Math.min(s+B,data.length)+" / "+data.length,"info");
+            return grist.docApi.applyUserActions([["BulkAddRecord",DEST,new Array(batch.length).fill(null),rec]]);
+          });
+        })(i);
+      }
+      return p;
+    })
+    .then(function(){
+      showLog("Table_Nettoyee mise a jour !\n- "+(filtD||cleanD).length+" lignes inserees.","ok");
+      btn.disabled=false;btn.textContent="Ecrire dans Grist";
+    })
+    .catch(function(e){
+      showLog("Erreur : "+e.message,"error");
+      btn.disabled=false;btn.textContent="Ecrire dans Grist";
+    });
+}
+
+var PALETTE=[
+  "#185FA5","#1d9e75","#BA7517","#A32D2D","#534AB7",
+  "#0F6E56","#993C1D","#3C3489","#27500A","#633806",
+  "#185FA5","#1d9e75","#BA7517","#A32D2D","#534AB7"
+];
+function getColors(n){return Array.from({length:n},function(_,i){return PALETTE[i%PALETTE.length];});}
+
+var XLBL={
+  "Mode de deplacement"   :"Mode de deplacement",
+  "Destination_Arrivee"   :"Destination Arrivee",
+  "Code_Pays_Arrivee"     :"Code Pays Arrivee",
+  "ZoneStatReponse4"      :"Identifiant",
+  "Client_Niveau_0_Prenom":"Centre"
+};
+
+function buildChart(){
+  if(!cleanD||!cleanD.length)return;
+  var xCol=document.getElementById("cx").value;
+  var data=cleanD;
+  var agg={};
+  data.forEach(function(row){
+    var k=(row[xCol]||"Inconnu").toString().trim();
+    if(!agg[k])agg[k]={count:0,sum:0};
+    agg[k].count+=1;
+    var p=parseFloat(row["Prix_de_Vente"]);
+    if(!isNaN(p))agg[k].sum+=p;
+  });
+  var labels=Object.keys(agg).sort(function(a,b){return agg[b].count-agg[a].count;});
+  var counts=labels.map(function(l){return agg[l].count;});
+  var sums=labels.map(function(l){return Math.round(agg[l].sum);});
+  var xl=XLBL[xCol]||xCol;
+  document.getElementById("ce").style.display="none";
+  document.getElementById("mc").style.display="block";
+  document.getElementById("btnS").disabled=false;
+  document.getElementById("btnS").style.opacity="1";
+  if(ci)ci.destroy();
+  var ctx=document.getElementById("mc").getContext("2d");
+  ci=new Chart(ctx,{
+    type:"bar",
+    data:{
+      labels:labels,
+      datasets:[
+        {label:"Nb deplacements",data:counts,backgroundColor:getColors(labels.length),borderRadius:4,yAxisID:"y1"},
+        {label:"Somme Prix Vente (EUR)",data:sums,backgroundColor:getColors(labels.length),borderRadius:4,yAxisID:"y2"}
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{display:true,position:"top"},
+        title:{display:true,text:"Deplacements et couts par "+xl,font:{size:13}},
+        tooltip:{callbacks:{label:function(c){return c.datasetIndex===0?" "+c.parsed.y+" deplacement(s)":" "+c.parsed.y.toLocaleString("fr-FR")+" EUR";}}}
+      },
+      scales:{
+        x:{ticks:{maxRotation:45,font:{size:11}}},
+        y1:{type:"linear",position:"left",beginAtZero:true,ticks:{precision:0,color:"#185FA5"},title:{display:true,text:"Nb deplacements",color:"#185FA5",font:{size:11}}},
+        y2:{type:"linear",position:"right",beginAtZero:true,grid:{drawOnChartArea:false},ticks:{color:"#1d9e75",callback:function(v){return v.toLocaleString("fr-FR")+" EUR";}},title:{display:true,text:"Somme Prix Vente (EUR)",color:"#1d9e75",font:{size:11}}}
+      }
+    }
+  });
+}
+
+function saveChart(){
+  if(!cleanD||!cleanD.length)return;
+  // Sauvegarder les 5 axes d un coup
+  var allAxes=["Mode de deplacement","Destination_Arrivee","Code_Pays_Arrivee","ZoneStatReponse4","Client_Niveau_0_Prenom"];
+  var axeLabels={"Mode de deplacement":"Mode de deplacement","Destination_Arrivee":"Destination Arrivee","Code_Pays_Arrivee":"Code Pays Arrivee","ZoneStatReponse4":"Identifiant","Client_Niveau_0_Prenom":"Centre"};
+  var rows=[];
+  allAxes.forEach(function(xCol){
+    var agg={};
+    cleanD.forEach(function(row){
+      var k=(row[xCol]||"Inconnu").toString().trim();
+      if(!agg[k])agg[k]={count:0,sum:0};
+      agg[k].count+=1;
+      var p=parseFloat(row["Prix_de_Vente"]);
+      if(!isNaN(p))agg[k].sum+=p;
+    });
+    Object.keys(agg).sort(function(a,b){return agg[b].count-agg[a].count;}).forEach(function(k){
+      rows.push({Categorie:k,Nb_Deplacements:agg[k].count,Somme_Prix_Vente:Math.round(agg[k].sum),Axe:axeLabels[xCol]||xCol});
+    });
+  });
+  var btn=document.getElementById("btnS"),st=document.getElementById("ss");
+  btn.disabled=true;st.textContent="Sauvegarde...";
+  var DEST="Table_Histogramme";
+  grist.docApi.fetchTable(DEST)
+    .then(function(ex){
+        var ids=ex.id||[];
+        var actions=[];
+        if(ids.length>0)actions.push(["BulkRemoveRecord",DEST,ids]);
+        // Forcer les types numeriques sur la table existante
+        actions.push(["ModifyColumn",DEST,"Nb_Deplacements",{type:"Numeric"}]);
+        actions.push(["ModifyColumn",DEST,"Somme_Prix_Vente",{type:"Numeric"}]);
+        return grist.docApi.applyUserActions(actions);
+      })
+    .catch(function(){return grist.docApi.applyUserActions([["AddTable",DEST,[{id:"Categorie",fields:{label:"Categorie"}},{id:"Nb_Deplacements",fields:{label:"Nb Deplacements",type:"Numeric"}},{id:"Somme_Prix_Vente",fields:{label:"Somme Prix Vente",type:"Numeric"}},{id:"Axe",fields:{label:"Axe X"}}]]]);})
+    .then(function(){
+      var rec={Categorie:rows.map(function(r){return r.Categorie;}),Nb_Deplacements:rows.map(function(r){return r.Nb_Deplacements;}),Somme_Prix_Vente:rows.map(function(r){return r.Somme_Prix_Vente;}),Axe:rows.map(function(r){return r.Axe;})};
+      return grist.docApi.applyUserActions([["BulkAddRecord",DEST,new Array(rows.length).fill(null),rec]]);
+    })
+    .then(function(){st.textContent=rows.length+" categories dans Table_Histogramme !";btn.disabled=false;})
+    .catch(function(e){st.textContent="Erreur : "+e.message;btn.disabled=false;});
+}
+
+function showLog(m,t){var el=document.getElementById("log");el.style.display="block";el.className=t||"ok";el.textContent=m;}
+</script>
+</body>
+</html>
