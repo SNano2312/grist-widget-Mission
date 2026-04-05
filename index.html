@@ -396,15 +396,21 @@ function writeToGrist(){
       });
     });
     return grist.docApi.fetchTable(DEST)
-      .then(function(){return grist.docApi.applyUserActions([["RemoveTable",DEST]]);})
-      .catch(function(){return Promise.resolve();})
-      .then(function(){
+      .then(function(ex){
+        // Vider les lignes sans toucher à la structure (préserve les graphiques)
+        var ids=ex.id||[];
+        var actions=[];
+        if(ids.length>0)actions.push(["BulkRemoveRecord",DEST,ids]);
+        return actions.length?grist.docApi.applyUserActions(actions):Promise.resolve();
+      })
+      .catch(function(){
+        // Table n existe pas : la créer avec les bons types
         return grist.docApi.applyUserActions([["AddTable",DEST,[
-          {id:"Categorie",            fields:{label:"Categorie",                        type:"Text"}},
-          {id:"Nb_Deplacements",      fields:{label:"Nb Deplacements",                 type:"Numeric"}},
-          {id:"Somme_Prix_Vente",     fields:{label:"Somme Prix Vente",                type:"Numeric"}},
-          {id:"Impact_carbone_total", fields:{label:"Impact carbone total (kgCO2)",     type:"Numeric"}},
-          {id:"Axe",                  fields:{label:"Axe X",                           type:"Text"}}
+          {id:"Categorie",            fields:{label:"Categorie",                    type:"Text"}},
+          {id:"Nb_Deplacements",      fields:{label:"Nb Deplacements",             type:"Numeric"}},
+          {id:"Somme_Prix_Vente",     fields:{label:"Somme Prix Vente",            type:"Numeric"}},
+          {id:"Impact_carbone_total", fields:{label:"Impact carbone total (kgCO2)",type:"Numeric"}},
+          {id:"Axe",                  fields:{label:"Axe X",                       type:"Text"}}
         ]]]);
       })
       .then(function(){
